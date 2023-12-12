@@ -1,0 +1,9 @@
+[Unit]
+Description=Start frontend server.
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /usr/customapps/pixelstreaming/Frontend/startFE.sh
+
+[Install]
+WantedBy=multi-user.target

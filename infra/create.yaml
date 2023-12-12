@@ -1,0 +1,1820 @@
+---
+  AWSTemplateFormatVersion: "2010-09-09"
+
+  Description: "Creates all the components needed for hosting UE5 Pixel Streaming on AWS"
+  Parameters:
+    VPCName:
+      Description: The name of the VPC being created.
+      Type: String
+      Default: "metaverse"
+    VPCCIDR:
+      Description: The CIDR of the VPC being created.
+      Type: String
+      Default: "10.0.0.0/16"
+    Public0CIDR:
+      Description: The CIDR of the first public subnet being created.
+      Type: String
+      Default: "10.0.0.0/24"
+    Public1CIDR:
+      Description: The CIDR of the second public subnet being created.
+      Type: String
+      Default: "10.0.1.0/24"
+    Private0CIDR:
+      Description: The CIDR of the first private subnet being created.
+      Type: String
+      Default: "10.0.2.0/24"
+    Private1CIDR:
+      Description: The CIDR of the second private subnet being created.
+      Type: String
+      Default: "10.0.3.0/24"
+    MatchmakerAMI:
+      Description: The AMI for Matchmaker server
+      Type: String
+      Default: "ami-0c284ed6bd6a72b4a"
+    MatchmakerInstanceType:
+      Description: The instance type for Matchmaker server
+      Type: String
+      Default: "t2.micro"
+    FrontEndAMI:
+      Description: The AMI for Frontend server
+      Type: String
+      Default: "ami-05422fc3670401f9a"
+    SignallingServerAMI:
+      Description: The AMI for Signalling server
+      Type: String
+      Default: "ami-014fefbaf7bdafab3"
+    FrontEndInstanceType:
+      Description: The instance type for Frontend server
+      Type: String
+      Default: "t2.micro"
+    SignallingInstanceType:
+      Description: The instance type for Signalling server
+      Type: String
+      Default: "t2.micro"       
+
+  Mappings:
+    AZRegions:
+      ap-south-1:
+        AZs: ["a", "b"]
+      us-east-1:
+        AZs: ["a", "b"]
+  
+  Resources:
+  
+    VPC:
+      Type: "AWS::EC2::VPC"
+      Properties:
+        EnableDnsSupport: "true"
+        EnableDnsHostnames: "true"
+        CidrBlock: !Ref 'VPCCIDR'
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Ref 'VPCName'
+
+    PublicSubnet0:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock: !Ref 'Public0CIDR'
+        MapPublicIpOnLaunch: "true"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-'
+                - !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    PublicSubnet1:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock: !Ref 'Public1CIDR'
+        MapPublicIpOnLaunch: "true"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-'
+                - !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    PrivateSubnet0:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock: !Ref 'Private0CIDR'
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Private"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-'
+                - !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    PrivateSubnet1:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock: !Ref 'Private1CIDR'
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Private"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-'
+                - !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    InternetGateway:
+      Type: "AWS::EC2::InternetGateway"
+      Properties:
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-IGW'
+
+
+    GatewayToInternet:
+      Type: "AWS::EC2::VPCGatewayAttachment"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        InternetGatewayId:
+          Ref: "InternetGateway"
+
+    PublicRouteTable:
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-route-table'
+
+
+    PublicRoute:
+      Type: "AWS::EC2::Route"
+      DependsOn: "GatewayToInternet"
+      Properties:
+        RouteTableId:
+          Ref: "PublicRouteTable"
+        DestinationCidrBlock: "0.0.0.0/0"
+        GatewayId:
+          Ref: "InternetGateway"
+
+    PublicSubnetRouteTableAssociation0:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet0"
+        RouteTableId:
+          Ref: "PublicRouteTable"
+
+    PublicSubnetRouteTableAssociation1:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet1"
+        RouteTableId:
+          Ref: "PublicRouteTable"
+
+    PublicNetworkAcl:
+      Type: "AWS::EC2::NetworkAcl"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-nacl'
+
+
+
+    InboundHTTPPublicNetworkAclEntry:
+      Type: "AWS::EC2::NetworkAclEntry"
+      Properties:
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+        RuleNumber: "100"
+        Protocol: "-1"
+        RuleAction: "allow"
+        Egress: "false"
+        CidrBlock: "0.0.0.0/0"
+        PortRange:
+          From: "0"
+          To: "65535"
+
+    OutboundPublicNetworkAclEntry:
+      Type: "AWS::EC2::NetworkAclEntry"
+      Properties:
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+        RuleNumber: "100"
+        Protocol: "-1"
+        RuleAction: "allow"
+        Egress: "true"
+        CidrBlock: "0.0.0.0/0"
+        PortRange:
+          From: "0"
+          To: "65535"
+
+    PublicSubnetNetworkAclAssociation0:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet0"
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+
+    PublicSubnetNetworkAclAssociation1:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet1"
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+
+    ElasticIP0:
+      Type: "AWS::EC2::EIP"
+      Properties:
+        Domain: "vpc"  
+
+    NATGateway0:
+      Type: "AWS::EC2::NatGateway"
+      Properties:
+        AllocationId:
+          Fn::GetAtt:
+            - "ElasticIP0"
+            - "AllocationId"
+        SubnetId:
+          Ref: "PublicSubnet0"
+
+    
+
+    PrivateRouteTable0:
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-route-table-0'
+
+    PrivateRouteTable1:
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-route-table-1'
+
+    PrivateRouteToInternet0:
+      Type: "AWS::EC2::Route"
+      Properties:
+        RouteTableId:
+          Ref: "PrivateRouteTable0"
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId:
+          Ref: "NATGateway0"
+
+    PrivateRouteToInternet1:
+      Type: "AWS::EC2::Route"
+      Properties:
+        RouteTableId:
+          Ref: "PrivateRouteTable1"
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId:
+          Ref: "NATGateway0"
+
+    PrivateSubnetRouteTableAssociation0:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet0"
+        RouteTableId:
+          Ref: "PrivateRouteTable0"
+
+    PrivateSubnetRouteTableAssociation1:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet1"
+        RouteTableId:
+          Ref: "PrivateRouteTable1"
+
+    MatchmakerALBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties: 
+        GroupDescription: "Security group for matchmaker ALB"
+        GroupName: "MatchmakerALBSecurityGroup"
+        SecurityGroupIngress: 
+          - CidrIp: "0.0.0.0/0"
+            IpProtocol: "TCP"
+            FromPort: 443
+            ToPort: 443
+          - CidrIp: "0.0.0.0/0"
+            IpProtocol: "TCP"
+            FromPort: 90
+            ToPort: 90  
+        VpcId: 
+          Ref: "VPC"
+
+    FrontEndALBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties: 
+        GroupDescription: "Security group for Frontend ALB"
+        GroupName: "FrontendALBSecurityGroup"
+        SecurityGroupIngress: 
+          - CidrIp: "0.0.0.0/0"
+            IpProtocol: "TCP"
+            FromPort: 443
+            ToPort: 443
+          - CidrIp: "0.0.0.0/0"
+            IpProtocol: "TCP"
+            FromPort: 80
+            ToPort: 80  
+        VpcId: 
+          Ref: "VPC"
+
+    SignallingALBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties: 
+        GroupDescription: "Security group for signalling ALB"
+        GroupName: "SignallingALBSecurityGroup"
+        SecurityGroupIngress: 
+          - CidrIp: "0.0.0.0/0"
+            IpProtocol: "TCP"
+            FromPort: 443
+            ToPort: 443
+          - CidrIp: "0.0.0.0/0"
+            IpProtocol: "TCP"
+            FromPort: 80
+            ToPort: 80  
+        VpcId: 
+          Ref: "VPC"
+
+    MatchmakerInstanceSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties: 
+        GroupDescription: "Security group for matchmaker instance"
+        GroupName: "MatchmakerInstanceSecurityGroup"
+        SecurityGroupIngress: 
+          - SourceSecurityGroupId:
+              Ref: "MatchmakerALBSecurityGroup"
+            IpProtocol: "TCP"
+            FromPort: 443
+            ToPort: 443
+          - SourceSecurityGroupId:
+              Ref: "MatchmakerALBSecurityGroup"
+            IpProtocol: "TCP"
+            FromPort: 90
+            ToPort: 90
+          - SourceSecurityGroupId:
+              Ref: "SignallingInstanceSecurityGroup"
+            IpProtocol: "TCP"
+            FromPort: 9999
+            ToPort: 9999        
+        VpcId: 
+          Ref: "VPC"
+
+    FrontEndInstanceSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties: 
+        GroupDescription: "Security group for Frontend instance"
+        GroupName: "FrontendInstanceSecurityGroup"
+        SecurityGroupIngress: 
+          - SourceSecurityGroupId:
+              Ref: "FrontEndALBSecurityGroup"
+            IpProtocol: "TCP"
+            FromPort: 443
+            ToPort: 443
+          - SourceSecurityGroupId:
+              Ref: "FrontEndALBSecurityGroup"
+            IpProtocol: "TCP"
+            FromPort: 8080
+            ToPort: 8080  
+        VpcId: 
+          Ref: "VPC"
+
+    SignallingInstanceSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties: 
+        GroupDescription: "Security group for signalling instance"
+        GroupName: "SignallingInstanceSecurityGroup"
+        SecurityGroupIngress: 
+          - SourceSecurityGroupId:
+              Ref: "SignallingALBSecurityGroup"
+            IpProtocol: "TCP"
+            FromPort: 443
+            ToPort: 443
+          - SourceSecurityGroupId:
+              Ref: "SignallingALBSecurityGroup"
+            IpProtocol: "TCP"
+            FromPort: 80
+            ToPort: 80   
+        VpcId: 
+          Ref: "VPC"
+
+    MatchMakerServerALB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties: 
+        Name: "MatchMakerPublicALB"
+        Scheme: "internet-facing"
+        SecurityGroups: 
+          - Ref: "MatchmakerALBSecurityGroup"
+        Subnets: 
+          - Ref: "PublicSubnet0"
+          - Ref: "PublicSubnet1"
+        Type: "application"
+    
+    MatchMakerTG:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      DependsOn:
+        - MatchMakingInstance
+      Properties: 
+        Name: "MatchMakerTargetGroup"
+        Port: 90
+        Protocol: "HTTP"
+        TargetType: 'instance'
+        Targets:
+          - Id: !Ref 'MatchMakingInstance'
+        VpcId:
+          Ref: "VPC"
+    
+    MatchMakerALBListener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions: 
+          - TargetGroupArn:
+              Ref: "MatchMakerTG"
+            Type: "forward"
+        LoadBalancerArn:
+          Ref: "MatchMakerServerALB"
+        Port: 90
+        Protocol: "HTTP"
+
+    FrontEndServerALB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties: 
+        Name: "frontend"
+        Scheme: "internet-facing"
+        SecurityGroups: 
+          - Ref: "FrontEndALBSecurityGroup"
+        Subnets: 
+          - Ref: "PublicSubnet0"
+          - Ref: "PublicSubnet1"
+        Type: "application"
+    
+    FrontEndTG:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      DependsOn:
+        - FrontEndInstance
+      Properties: 
+        Name: "FrontEndTargetGroup"
+        Port: 8080
+        Protocol: "HTTP"
+        TargetType: 'instance'
+        Targets:
+          - Id: !Ref 'FrontEndInstance'
+        VpcId:
+          Ref: "VPC"
+    
+    FrontEndALBListener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions: 
+          - TargetGroupArn:
+              Ref: "FrontEndTG"
+            Type: "forward"
+        LoadBalancerArn:
+          Ref: "FrontEndServerALB"
+        Port: 80
+        Protocol: "HTTP"
+
+    SignallingServerALB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties: 
+        Name: "signalling"
+        Scheme: "internet-facing"
+        SecurityGroups: 
+          - Ref: "SignallingALBSecurityGroup"
+        Subnets: 
+          - Ref: "PrivateSubnet0"
+          - Ref: "PrivateSubnet1"
+        Type: "application"
+    
+    SignallingTG:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup01"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"
+
+    SignallingTG2:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup02"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"      
+
+    SignallingT3:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup03"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"
+
+    SignallingTG4:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup04"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"      
+
+    SignallingTG5:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup05"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"   
+
+    SignallingT6:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup06"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"
+
+    SignallingTG7:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup07"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"      
+
+    SignallingT8:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup08"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"
+
+    SignallingTG9:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup09"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"      
+
+    SignallingTG10:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties: 
+        Name: "SignallingTargetGroup10"
+        Port: 80
+        Protocol: "HTTP"
+        VpcId:
+          Ref: "VPC"    
+
+
+    SignallingALBListener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions: 
+          - TargetGroupArn:
+              Ref: "SignallingTG"
+            Type: "forward"
+        LoadBalancerArn:
+          Ref: "SignallingServerALB"
+        Port: 80
+        Protocol: "HTTP"    
+
+    SignallingALBListenerRule:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingTG2"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "02"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 1
+
+    SignallingALBListenerRule03:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingT3"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "03"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 2
+
+    SignallingALBListenerRule04:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingTG4"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "04"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 3
+
+    SignallingALBListenerRule05:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingTG5"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "05"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 4   
+
+    SignallingALBListenerRule06:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingT6"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "06"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 5
+
+    SignallingALBListenerRule07:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingTG7"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "07"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 6
+
+    SignallingALBListenerRule08:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingT8"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "08"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 7
+
+    SignallingALBListenerRule09:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingTG9"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "09"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 8
+
+    SignallingALBListenerRule10:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - TargetGroupArn:
+              Ref: "SignallingTG10"
+            Type: "forward"
+        Conditions: 
+          - Field: "query-string"
+            QueryStringConfig:
+              Values: 
+                - Key: "session"
+                  Value: "10"
+        ListenerArn:
+          Ref: "SignallingALBListener"
+        Priority: 9
+
+    MatchmakerLaunchTemplate:
+      Type: AWS::EC2::LaunchTemplate
+      Properties: 
+        LaunchTemplateData: 
+          ImageId: !Ref "MatchmakerAMI"
+          TagSpecifications:
+            - ResourceType: 'instance'
+              Tags:
+                - Key: 'Name'
+                  Value: 'Matchmaker'
+                - Key: 'type'
+                  Value: 'matchmaker'
+          InstanceType: !Ref "MatchmakerInstanceType"
+          SecurityGroupIds:
+            - !GetAtt MatchmakerInstanceSecurityGroup.GroupId 
+        LaunchTemplateName: "MatchmakerLaunchTemplate"
+        
+    FrontEndLaunchTemplate:
+      Type: AWS::EC2::LaunchTemplate
+      Properties: 
+        LaunchTemplateData: 
+          ImageId: !Ref "FrontEndAMI"
+          TagSpecifications:
+            - ResourceType: 'instance'
+              Tags:
+                - Key: 'Name'
+                  Value: 'Frontend'
+                - Key: 'type'
+                  Value: 'frontend'
+          InstanceType: !Ref "FrontEndInstanceType"
+          SecurityGroupIds:
+            - !GetAtt FrontEndInstanceSecurityGroup.GroupId 
+        LaunchTemplateName: "FrontEndLaunchTemplate"
+        
+    SignallingLaunchTemplate:
+      Type: AWS::EC2::LaunchTemplate
+      DependsOn:
+        - Ec2InstanceProfiles
+      Properties: 
+        LaunchTemplateData: 
+          InstanceType: !Ref "SignallingInstanceType"
+          IamInstanceProfile:
+            Arn: !GetAtt
+              - Ec2InstanceProfiles
+              - Arn
+          TagSpecifications:
+            - ResourceType: 'instance'
+              Tags:
+                - Key: 'Name'
+                  Value: 'Signalling'
+                - Key: 'type'
+                  Value: 'signalling'
+          SecurityGroupIds:
+            - !GetAtt SignallingInstanceSecurityGroup.GroupId 
+        LaunchTemplateName: "SignallingLaunchTemplate"
+
+    MatchMakingInstance:
+      Type: AWS::EC2::Instance
+      DependsOn:
+        - Ec2InstanceProfiles
+      Properties:
+        LaunchTemplate:
+          LaunchTemplateId: !Ref "MatchmakerLaunchTemplate"
+          Version: "1"
+        SubnetId: !Ref "PrivateSubnet0"
+        IamInstanceProfile: !Ref "Ec2InstanceProfiles"
+
+    FrontEndInstance:
+      Type: AWS::EC2::Instance
+      DependsOn:
+        - Ec2InstanceProfiles
+      Properties:
+        LaunchTemplate:
+          LaunchTemplateId: !Ref "FrontEndLaunchTemplate"
+          Version: "1"
+        SubnetId: !Ref "PrivateSubnet0"
+        IamInstanceProfile: !Ref "Ec2InstanceProfiles"
+        
+    Ec2InstanceProfiles:
+      Type: AWS::IAM::InstanceProfile
+      DependsOn:
+        - EC2IAMRole
+      Properties: 
+        InstanceProfileName: 'instanceProfileForUE'
+        Roles: 
+          - !Ref "EC2IAMRole"
+
+        
+    EC2IAMRole:
+      Type: AWS::IAM::Role
+      Properties: 
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - ec2.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: "Role for EC2 servers"
+        ManagedPolicyArns:
+          - 'arn:aws:iam::aws:policy/AmazonSSMFullAccess'
+        Policies: 
+          - PolicyName: accessDynamoDB
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: VisualEditor0
+                  Effect: Allow
+                  Action:
+                    - "dynamodb:Scan"
+                    - "dynamodb:Query"
+                    - "dynamodb:GetRecords"
+                  Resource: 
+                    - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/*/index/*'
+                    - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/*/stream/*'
+                - Sid: VisualEditor1
+                  Effect: Allow
+                  Action:
+                    - "dynamodb:DescribeTable"
+                    - "dynamodb:GetItem"
+                    - "dynamodb:Scan"
+                    - "dynamodb:Query"
+                  Resource: !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/*'
+          - PolicyName: accessParamaterStore
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: VisualEditor0
+                  Effect: Allow
+                  Action:
+                    - "ssm:GetParameterHistory"
+                    - "ssm:GetParametersByPath"
+                    - "ssm:GetParameters"
+                    - "ssm:GetParameter"
+                  Resource: 
+                    - 'arn:aws:s3:::*'
+                    - !Sub 'arn:aws:ssm:*:${AWS::AccountId}:parameter/*'
+                - Sid: VisualEditor1
+                  Effect: Allow
+                  Action:
+                    - "ssm:DescribeParameters"
+                  Resource: '*'
+          - PolicyName: pullFromCodeCommit
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "codecommit:TagResource"
+                    - "codecommit:GetTree"
+                    - "codecommit:GetBlob"
+                    - "codecommit:GetReferences"
+                    - "codecommit:ListRepositories"
+                    - "codecommit:GetPullRequestApprovalStates"
+                    - "codecommit:DescribeMergeConflicts"
+                    - "codecommit:BatchDescribeMergeConflicts"
+                    - "codecommit:GetCommentsForComparedCommit"
+                    - "codecommit:GetCommentReactions"
+                    - "codecommit:GetCommit"
+                    - "codecommit:GetComment"
+                    - "codecommit:GetCommitHistory"
+                    - "codecommit:GetCommitsFromMergeBase"
+                    - "codecommit:GetApprovalRuleTemplate"
+                    - "codecommit:BatchGetCommits"
+                    - "codecommit:DescribePullRequestEvents"
+                    - "codecommit:GetPullRequest"
+                    - "codecommit:ListBranches"
+                    - "codecommit:GetPullRequestOverrideState"
+                    - "codecommit:GetRepositoryTriggers"
+                    - "codecommit:GitPull"
+                    - "codecommit:BatchGetRepositories"
+                    - "codecommit:GetCommentsForPullRequest"
+                    - "codecommit:UntagResource"
+                    - "codecommit:GetObjectIdentifier"
+                    - "codecommit:CancelUploadArchive"
+                    - "codecommit:GetFolder"
+                    - "codecommit:BatchGetPullRequests"
+                    - "codecommit:GetFile"
+                    - "codecommit:GetUploadArchiveStatus"
+                    - "codecommit:EvaluatePullRequestApprovalRules"
+                    - "codecommit:GetDifferences"
+                    - "codecommit:GetRepository"
+                    - "codecommit:GetBranch"
+                    - "codecommit:GetMergeConflicts"
+                    - "codecommit:GetMergeCommit"
+                    - "codecommit:GetMergeOptions"
+                  Resource: !Sub 'arn:aws:codecommit:*:${AWS::AccountId}:*'
+          - PolicyName: registerInstancesToTG
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "elasticloadbalancing:RegisterTargets"
+                  Resource: !Sub 'arn:aws:elasticloadbalancing:*:${AWS::AccountId}:targetgroup/*/*'
+        RoleName: "EC2Role"
+
+
+    LambdaIAMRole:
+      Type: AWS::IAM::Role
+      DependsOn:
+        - EC2IAMRole
+      Properties: 
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: "Role for lambda functions"
+        Policies: 
+          - PolicyName: invokeLambda
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "lambda:InvokeFunctionUrl"
+                    - "lambda:InvokeFunction"
+                    - "lambda:GetFunction"
+                    - "lambda:InvokeAsync"
+                  Resource: !Sub 'arn:aws:lambda:*:${AWS::AccountId}:function:*'
+          - PolicyName: dynamoDBPrivileges
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: VisualEditor0
+                  Effect: Allow
+                  Action:
+                    - "dynamodb:Scan"
+                    - "dynamodb:Query"
+                    - "dynamodb:GetRecords"
+                  Resource: 
+                    - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/*/index/*'
+                    - !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/*/stream/*'
+                - Sid: VisualEditor1
+                  Effect: Allow
+                  Action:
+                    - "dynamodb:BatchGetItem"
+                    - "dynamodb:ConditionCheckItem"
+                    - "dynamodb:PutItem"
+                    - "dynamodb:DescribeTable"
+                    - "dynamodb:GetItem"
+                    - "dynamodb:Scan"
+                    - "dynamodb:Query"
+                    - "dynamodb:UpdateItem"
+                  Resource: !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/*'     
+                - Sid: VisualEditor2
+                  Effect: Allow
+                  Action:
+                    - "dynamodb:ListTables"
+                  Resource: '*'          
+          - PolicyName: terminateEC2Intance
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "ec2:TerminateInstances"
+                  Resource: !Sub 'arn:aws:ec2:*:${AWS::AccountId}:instance/*'
+          - PolicyName: registerInstancesToTG
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "elasticloadbalancing:RegisterTargets"
+                  Resource: !Sub 'arn:aws:elasticloadbalancing:*:${AWS::AccountId}:targetgroup/*/*'
+          - PolicyName: getSSMParamater
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "ssm:GetParametersByPath"
+                    - "ssm:GetParameters"
+                    - "ssm:GetParameter"
+                  Resource: 
+                    - 'arn:aws:s3:::*'
+                    - !Sub 'arn:aws:ssm:*:${AWS::AccountId}:parameter/*'
+          - PolicyName: describeLoadbalancer
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "elasticloadbalancing:DescribeLoadBalancerAttributes"
+                    - "elasticloadbalancing:DescribeLoadBalancers"
+                    - "elasticloadbalancing:DescribeListeners"
+                    - "elasticloadbalancing:DescribeTargetGroups"
+                    - "elasticloadbalancing:DescribeRules"
+                  Resource: '*'
+          - PolicyName: root
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: VisualEditor0
+                  Effect: Allow
+                  Action:
+                    - "iam:PassRole"
+                  Resource: !GetAtt EC2IAMRole.Arn
+                - Sid: VisualEditor1
+                  Effect: Allow
+                  Action:
+                    - "ec2:DescribeInstances"
+                    - "cloudwatch:PutMetricData"
+                    - "ec2:DeleteTags"
+                    - "ec2:CreateTags"
+                    - "ec2:DescribeInstanceAttribute"
+                    - "ec2:RunInstances"
+                    - "ec2:StopInstances"
+                    - "elasticloadbalancing:CreateLoadBalancerListeners"
+                    - "elasticloadbalancing:DescribeLoadBalancerAttributes"
+                    - "elasticloadbalancing:DeleteLoadBalancerPolicy"
+                    - "elasticloadbalancing:DescribeLoadBalancers"
+                    - "ec2:StartInstances"
+                    - "elasticloadbalancing:DescribeLoadBalancerPolicies"
+                    - "elasticloadbalancing:DeleteLoadBalancerListeners"
+                    - "elasticloadbalancing:CreateLoadBalancerPolicy"
+                    - "ec2:DescribeInstanceStatus"
+                  Resource: '*'
+                - Sid: VisualEditor2
+                  Effect: Allow
+                  Action:
+                    - "logs:DeleteLogGroup"
+                    - "logs:CreateLogGroup"
+                    - "logs:PutLogEvents"
+                    - "elasticloadbalancing:CreateLoadBalancerListeners"
+                    - "elasticloadbalancing:DeleteLoadBalancerPolicy"
+                    - "elasticloadbalancing:DeleteLoadBalancerListeners"
+                    - "elasticloadbalancing:CreateLoadBalancerPolicy"
+                    - "sqs:DeleteMessage"
+                    - "sqs:GetQueueUrl"
+                    - "sqs:ChangeMessageVisibility"
+                    - "sqs:SendMessage"
+                    - "sqs:ReceiveMessage"
+                    - "execute-api:*"
+                  Resource:
+                    - !Sub 'arn:aws:sqs:*:${AWS::AccountId}:*'
+                    - !Sub 'arn:aws:execute-api:*:${AWS::AccountId}:*/*/*/*'
+                    - !Sub 'arn:aws:elasticloadbalancing:*:${AWS::AccountId}:loadbalancer/*'
+                    - !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*:log-stream:*'
+                - Sid: VisualEditor3
+                  Effect: Allow
+                  Action:
+                    - "logs:CreateLogStream"
+                    - "logs:DeleteLogStream"
+                  Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:log-group:*'
+                - Sid: VisualEditor4
+                  Effect: Allow
+                  Action:
+                    - "elasticloadbalancing:DeleteLoadBalancerPolicy"
+                    - "elasticloadbalancing:DeleteLoadBalancerListeners"
+                    - "elasticloadbalancing:CreateLoadBalancerPolicy"
+                    - "elasticloadbalancing:CreateLoadBalancerListeners"
+                  Resource: !Sub 'arn:aws:elasticloadbalancing:*:${AWS::AccountId}:loadbalancer/*'
+        RoleName: "LambdaRole"
+
+    RegisterInstanceFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Register Signalling instance to a target group"
+        Environment: 
+          Variables:
+            DynamoDBName: !Ref "InstanceMappingTable"
+        FunctionName: "registerInstances"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+
+    CreateInstanceFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Create Signalling instance on a trigger"
+        Environment: 
+          Variables:
+            DynamoDBName: !Ref "InstanceMappingTable"
+            ImageId: !Ref "SignallingServerAMI"
+            LaunchTemplateName: "SignallingLaunchTemplate"
+            SubnetIdPublicA: !GetAtt PublicSubnet0.SubnetId
+            SubnetIdPublicB: !GetAtt PublicSubnet1.SubnetId
+        FunctionName: "createInstances"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+
+    RequestSessionFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Request a pixel streaming session"
+        Environment: 
+          Variables:
+            DynamoDBName: !Ref "InstanceMappingTable"
+            SQSName: !GetAtt SessionQueue.QueueName
+            clientSecret: "somethingsecret"
+        FunctionName: "requestSession"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+        
+    # Function permissions grant an AWS service or another account permission to use a function
+
+    RequestSessionFunctionPermission:
+      Type: 'AWS::Lambda::Permission'
+      Properties:
+        Action: 'lambda:InvokeFunction'
+        Principal: apigateway.amazonaws.com
+        FunctionName: !Ref RequestSessionFunction
+        SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RequestSessionAPI}/*'
+        
+    AuthorizeClientFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import json
+
+            def lambda_handler(event, context):
+              # TODO implement
+              print(event)
+              #if(event["headers"]["bearer"] == "abcd"):
+              if("abcd" == event["queryStringParameters"]["tokenId"]):
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps('Web socket connection  valid !')
+                  }
+              else:
+                  return {
+                      'statusCode': 401,
+                      'body': json.dumps('Web socket connection  ivalid !')
+                  } 
+        Description: "Authorize client"
+        FunctionName: "authorizeClient"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+          
+    # Function permissions grant an AWS service or another account permission to use a function
+    AuthorizeClientPermission:
+      Type: 'AWS::Lambda::Permission'
+      Properties:
+        Action: 'lambda:InvokeFunction'
+        Principal: apigateway.amazonaws.com
+        FunctionName: !Ref AuthorizeClientFunction
+        SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RequestSessionAPI}/*'
+    
+    SendSessionDetailsFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Send pixel streaming session details to client"
+        Environment: 
+          Variables:
+            DynamoDBName: !Ref "InstanceMappingTable"
+            SQSName: !GetAtt SessionQueue.QueueName
+            ApiGatewayUrl: !Sub "https://${RequestSessionAPI}.execute-api.${AWS::Region}.amazonaws.com/production"
+            MatchMakerURL: !Join ['',['http://',!GetAtt MatchMakerServerALB.DNSName,':90/signallingserver']]
+        FunctionName: "sendSessionDetails"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+        
+    KeepConnectionAliveFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Send keep alive messages to client"
+        Environment: 
+          Variables:
+            ApiGatewayUrl: !Sub "https://${RequestSessionAPI}.execute-api.${AWS::Region}.amazonaws.com/production"
+        FunctionName: "keepConnectionAlive"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+
+    TerminateInstanceFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Terminate all stopped Signalling server instances"
+        Environment: 
+          Variables:
+            DynamoDBName: !Ref "InstanceMappingTable"
+        FunctionName: "terminateInstance"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+        
+    PollerFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Polls for incoming session request and services them"
+        Environment: 
+          Variables:
+            MatchMakerURL: !Join ['',['http://',!GetAtt MatchMakerServerALB.DNSName,':90/signallingserver']]
+            SQSName: !GetAtt SessionQueue.QueueName
+        FunctionName: "poller"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+    
+    AuthorizeClientFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Authorize web socket connections from client"
+        FunctionName: "authorizeClient"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 900
+        
+    UploadToDDBFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn 
+        Code: 
+          ZipFile: |
+            import boto3
+            import json
+            import os
+            import json
+            def lambda_handler(event, context):
+              return {
+                'statusCode': 200,
+                'body': json.dumps('This is default implementation! Please replace this !')    
+              }
+        Description: "Uploads signalling server alb query string mapping to DynamoDB"
+        Environment: 
+          Variables:
+            DynamoDBName: !Ref "InstanceMappingTable"
+            ALBName: !GetAtt SignallingServerALB.LoadBalancerName
+        FunctionName: "uploadToDDB"
+        Handler: "index.lambda_handler"
+        Runtime: "python3.10"
+        Timeout: 30
+    
+    SessionQueue:
+      Type: AWS::SQS::Queue
+      Properties: 
+        DeduplicationScope: "queue"
+        FifoQueue: true
+        FifoThroughputLimit: "perQueue"
+        QueueName: "sessions.fifo"
+
+    ConcurencyParameter:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: "concurrencyLimit"
+        Type: "String"
+        Value: "10"
+        Description: "Maximum number of Signalling instances running in parallel"
+        
+    MatchMakerServerSecret:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: "matchmakerclientsecret"
+        Type: "String"
+        Value: "somesecretstring"
+        Description: "client secret for validation by Matchmaker"
+
+
+    InstanceMappingTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: "TargetGroup"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "TargetGroup"
+            KeyType: "HASH"
+        ProvisionedThroughput: 
+          ReadCapacityUnits: "5"
+          WriteCapacityUnits: "5"
+        TableName: "instanceMapping"
+        
+        
+    PollerTriggerRule: 
+      Type: AWS::Events::Rule
+      Properties: 
+        Name: "PollForIncomingRequest"
+        Description: "Poll for incoming request(Running every 5 minutes)"
+        ScheduleExpression: "cron(0/5 * * * ? *)"
+        State: "ENABLED"
+        Targets: 
+          - 
+            Arn: !GetAtt PollerFunction.Arn
+            Id: "TargetFunctionV1"
+  
+    PermissionForPollerTriggerEventToInvokeLambda: 
+      Type: AWS::Lambda::Permission
+      Properties: 
+        FunctionName: !Ref "PollerFunction"
+        Action: "lambda:InvokeFunction"
+        Principal: "events.amazonaws.com"
+        SourceArn: !GetAtt PollerTriggerRule.Arn
+
+    ScheduledStartRule: 
+      Type: AWS::Events::Rule
+      Properties: 
+        Name: "ScheduledStartSignallingServer"
+        Description: "Start Signalling Servers at 10 AM everyday"
+        ScheduleExpression: "cron(0 10 * * ? *)"
+        State: "ENABLED"
+        Targets: 
+          - 
+            Arn: !GetAtt CreateInstanceFunction.Arn
+            Id: "TargetFunctionV1"
+            Input: '{"startAllServers":false}'
+  
+    PermissionForScheduleStartEventsToInvokeLambda: 
+      Type: AWS::Lambda::Permission
+      Properties: 
+        FunctionName: !Ref "CreateInstanceFunction"
+        Action: "lambda:InvokeFunction"
+        Principal: "events.amazonaws.com"
+        SourceArn: !GetAtt ScheduledStartRule.Arn
+
+    RegisterInstanceRule:
+      Type: AWS::Events::Rule
+      Properties:
+        Description: "Register all running signalling servers"
+        EventPattern:
+          source:
+            - "aws.ec2"
+          detail-type:
+            - "EC2 Instance State-change Notification"
+          detail:
+            state:
+              - "running"
+        Name: "registerSignallingServer"
+        State: "ENABLED"
+        Targets:
+          - Id: "TargetFunctionV1"
+            Arn: !GetAtt RegisterInstanceFunction.Arn
+            
+    PermissionForRegisterInstanceEventsToInvokeLambda: 
+      Type: AWS::Lambda::Permission
+      Properties: 
+        FunctionName: !Ref "RegisterInstanceFunction"
+        Action: "lambda:InvokeFunction"
+        Principal: "events.amazonaws.com"
+        SourceArn: !GetAtt RegisterInstanceRule.Arn    
+
+    TerminateInstanceRule:
+      Type: AWS::Events::Rule
+      Properties:
+        Description: "Terminate all stopped signalling servers"
+        EventPattern:
+          source:
+            - "aws.ec2"
+          detail-type:
+            - "EC2 Instance State-change Notification"
+          detail:
+            state:
+              - "stopped"
+        Name: "terminateSignallingServer"
+        State: "ENABLED"
+        Targets:
+          - Id: "TargetFunctionV1"
+            Arn: !GetAtt TerminateInstanceFunction.Arn
+            
+            
+    PermissionForTerminateInstanceEventsToInvokeLambda: 
+      Type: AWS::Lambda::Permission
+      Properties: 
+        FunctionName: !Ref "TerminateInstanceFunction"
+        Action: "lambda:InvokeFunction"
+        Principal: "events.amazonaws.com"
+        SourceArn: !GetAtt TerminateInstanceRule.Arn
+
+    ScheduledStopRule: 
+      Type: AWS::Events::Rule
+      Properties: 
+        Name: "ScheduledStopAllSignallingServer"
+        Description: "Stop Signalling Servers at 6:15 PM everyday"
+        ScheduleExpression: "cron(15 18 * * ? *)"
+        State: "ENABLED"
+        Targets: 
+          - 
+            Arn: !GetAtt TerminateInstanceFunction.Arn
+            Id: "TargetFunctionV1"
+            Input: '{"stopAllServers":true}'
+            
+            
+    PermissionForScheduleStopEventsToInvokeLambda: 
+      Type: AWS::Lambda::Permission
+      Properties: 
+        FunctionName: !Ref "TerminateInstanceFunction"
+        Action: "lambda:InvokeFunction"
+        Principal: "events.amazonaws.com"
+        SourceArn: !GetAtt ScheduledStopRule.Arn
+        
+    RequestSessionAPI:
+      Type: 'AWS::ApiGatewayV2::Api'
+      Properties:
+        Name: requestSessionTest
+        ProtocolType: WEBSOCKET
+        RouteSelectionExpression: $request.body.action
+        ApiKeySelectionExpression: $request.header.x-api-key 
+        
+    OnConnectIntegration:
+      Type: AWS::ApiGatewayV2::Integration
+      Properties:
+        ApiId: !Ref RequestSessionAPI
+        Description: OnConnect Integration
+        IntegrationType: AWS_PROXY
+        IntegrationUri: 
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthorizeClientFunction.Arn}/invocations
+            
+    OnConnectRoute:
+      Type: AWS::ApiGatewayV2::Route
+      Properties:
+        ApiId: !Ref RequestSessionAPI
+        RouteKey: $connect
+        AuthorizationType: NONE
+        OperationName: OnConnectRoute
+        RouteResponseSelectionExpression: $default
+        Target: !Join
+          - '/'
+          - - 'integrations'
+            - !Ref OnConnectIntegration
+
+    ReqSessionIntegration:
+      Type: AWS::ApiGatewayV2::Integration
+      Properties:
+        ApiId: !Ref RequestSessionAPI
+        Description: reqSession Integration
+        IntegrationType: AWS_PROXY
+        IntegrationUri: 
+          Fn::Sub:
+              arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RequestSessionFunction.Arn}/invocations
+              
+    ReqSessionRouteDef:
+      Type: AWS::ApiGatewayV2::Route
+      Properties:
+        ApiId: !Ref RequestSessionAPI
+        RouteKey: reqSession
+        AuthorizationType: NONE
+        OperationName: reqSessionRoute
+        Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref ReqSessionIntegration
+          
+    Deployment:
+      Type: AWS::ApiGatewayV2::Deployment
+      DependsOn:
+        - ReqSessionRouteDef
+      Properties:
+        ApiId: !Ref RequestSessionAPI
+      
+    Stage:
+      Type: AWS::ApiGatewayV2::Stage
+      Properties:
+        StageName: production
+        Description: Prod Stage
+        DeploymentId: !Ref Deployment
+        ApiId: !Ref RequestSessionAPI
+        
+    CloudFrontDistribution:
+        Type: 'AWS::CloudFront::Distribution'
+        DependsOn:
+          - FrontEndServerALB
+        #- LambdaEdgeFunction
+        Properties:
+          DistributionConfig:
+            Comment: 'Cloudfront Distribution pointing ALB Origin'
+            Origins:
+              - DomainName: !GetAtt FrontEndServerALB.DNSName 
+                Id: 'alb'
+                CustomOriginConfig:
+                  HTTPPort: '80'
+                  HTTPSPort: '443'
+                  OriginProtocolPolicy: 'http-only'
+            Enabled: true
+            HttpVersion: 'http2'
+            DefaultCacheBehavior:
+              CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad'
+              AllowedMethods:
+                - GET
+                - HEAD
+                - DELETE
+                - OPTIONS
+                - PATCH
+                - POST
+                - PUT
+              Compress: true
+              TargetOriginId: 'alb'
+              ViewerProtocolPolicy: 'https-only'
+            PriceClass: 'PriceClass_200'
+            IPV6Enabled: false
+            
+    cognitoUserPool:
+        Type: AWS::Cognito::UserPool
+        DependsOn:
+          - CloudFrontDistribution
+        Properties:
+          AccountRecoverySetting:
+            RecoveryMechanisms:
+              - Name: verified_email
+                Priority: 1
+          UsernameAttributes:
+            - email
+          AutoVerifiedAttributes:
+            - email
+          UserPoolName: 'ueauthenticationpool'
+          Schema:
+            - Name: email
+              AttributeDataType: String
+              Mutable: false
+              Required: true
+          
+    cognitoUserPoolclient:
+        Type: AWS::Cognito::UserPoolClient
+        Properties:
+          UserPoolId: !Ref cognitoUserPool
+          AllowedOAuthFlowsUserPoolClient: true
+          GenerateSecret: true
+          CallbackURLs:
+            - !Join ['',['https://',!GetAtt CloudFrontDistribution.DomainName]]
+          AllowedOAuthFlows:
+            - code
+          AllowedOAuthScopes:
+            - email
+            - openid
+            - aws.cognito.signin.user.admin
+          SupportedIdentityProviders:
+            - COGNITO
+        
+    cognitoUserPoolDomain:
+        Type: AWS::Cognito::UserPoolDomain
+        Properties:
+          Domain: 'mysampleappmvjd'
+          UserPoolId: !Ref cognitoUserPool
+          
+          
+    
+   
+
+  Outputs:
+  
+    CognitoCallBackURL:
+      Description: "Callback URL for Cognito"
+      Value: !Join ['',['https://',!GetAtt CloudFrontDistribution.DomainName]]
+      
+    CognitoClientID:
+      Description: "Client ID for Cognito"
+      Value: !Ref 'cognitoUserPoolclient'
+      
+    CognitoDomainURL:
+      Description: "Domain URL for Cognito"
+      Value: !Sub "https://mysampleappmvjd.auth.${AWS::Region}.amazoncognito.com"
+      
+    SignallingServerWSAPI:
+      Description: "Web socket endpoint for signalling server"
+      Value: !Join ['',['wss://',!GetAtt SignallingServerALB.DNSName,'?']]
+      
+    APIGatewayWSAPI:
+      Description: "Web socket endpoint for api server"
+      Value: !Sub "wss://${RequestSessionAPI}.execute-api.${AWS::Region}.amazonaws.com/production?tokenId=abcd"

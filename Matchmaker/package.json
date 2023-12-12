@@ -1,0 +1,14 @@
+{
+  "name": "@epicgames-ps/cirrus-matchmaker",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Cirrus servers connect to the Matchmaker which redirects a browser to the next available Cirrus server",
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.362.0",
+    "aws-sdk": "^2.1408.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "socket.io": "4.6.0",
+    "yargs": "17.3.1"
+  }
+}
